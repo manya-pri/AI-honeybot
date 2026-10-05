@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.streamlit/secrets.toml
+.env
+data/*.jsonl
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+!data/.gitkeep

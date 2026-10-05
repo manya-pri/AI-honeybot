@@ -1,0 +1,3 @@
+# Deployment
+
+This build is for localhost demonstration only. Install dependencies, start Flask with `python app.py`, FastAPI with `python -m uvicorn api_server:app --host 127.0.0.1 --port 8000`, and the optional Streamlit view. Run `python scripts/demo_mode.py` for synthetic activity. `docker compose up --build` provides a loopback-only container stack at port 8080. The Docker CLI was unavailable during implementation, so validate the configuration on a host with Docker. SQLite persists to `data/honeybot.sqlite`; JSONL remains at `data/events.jsonl`. Keep `.env` secrets out of source control. Optional GeoIP uses local MaxMind files configured by `HONEYPOT_GEOIP_CITY_DB` / `HONEYPOT_GEOIP_ASN_DB`.
