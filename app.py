@@ -231,14 +231,19 @@ def capture_request() -> tuple[str, int] | None:
 
 @app.get("/")
 def index():
-    return """<!doctype html><title>Northstar Portal</title><h1>Northstar Portal</h1>
-    <p>Welcome. <a href='/login'>Sign in</a></p>"""
+    return """<!doctype html><title>Northstar Portal · AI-Honeybot demo</title><h1>Northstar Portal</h1>
+    <p>Welcome to the fictional portal used by the AI-Honeybot security demo.
+    <a href='/login'>Open the decoy sign-in</a></p>
+    <hr><p><strong>Security research demonstration.</strong> This is not a real account portal.
+    Do not submit real credentials. Requests and basic connection details may be recorded
+    for defensive analysis.</p><p><a href='https://github.com/manya-pri/AI-honeybot'>View source code</a></p>"""
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
         return """<!doctype html><title>Sign in</title><h1>Sign in</h1>
+        <p>Demonstration only. Do not enter a real username or password.</p>
         <form method='post'><label>User <input name='username'></label>
         <label>Password <input name='password' type='password'></label>
         <button>Sign in</button></form>"""

@@ -5,6 +5,8 @@ from __future__ import annotations
 import html
 import json
 import os
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
@@ -15,11 +17,13 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from dashboard_data import prepare_dashboard_data
+from analyzer import RuleBasedAnalyzer, extract_behavior_features
+from risk_response import InMemoryRiskStore, RiskResponseManager
 
 load_dotenv()
 EVENTS_FILE = Path(os.environ.get("HONEYPOT_EVENTS_FILE", "data/events.jsonl"))
 API_URL = os.environ.get("HONEYPOT_API_URL", "http://127.0.0.1:8000").rstrip("/")
-NAVIGATION = ("Overview", "Threats", "Attackers", "AI Analysis", "Deception", "Containment")
+NAVIGATION = ("Overview", "Threats", "Attackers", "AI Analysis", "Deception", "Containment", "Live Demo")
 
 st.set_page_config(page_title="AI—HONEYBOT | Security Monitor", page_icon="◈", layout="wide")
 st.markdown(
@@ -98,6 +102,27 @@ st.markdown(
       .flow-arrow { color:#5b8eff;font-size:1.1rem; }
       .agent-state { display:inline-flex;align-items:center;gap:.55rem;border:1px solid rgba(77,157,255,.23);border-radius:99px;padding:.48rem .78rem;color:#b8dcff;background:rgba(31,76,138,.17);font-size:.68rem;letter-spacing:.12em; }
       .agent-pulse { width:.45rem;height:.45rem;border-radius:50%;background:#62cbff;box-shadow:0 0 12px #62cbff;animation:pulse 1.8s ease-in-out infinite; }
+      .live-demo-panel { border:1px solid rgba(90,153,255,.25);border-radius:25px;padding:clamp(1.1rem,3vw,2rem);background:radial-gradient(ellipse at 90% 4%,rgba(63,86,190,.18),transparent 40%),linear-gradient(145deg,rgba(17,24,43,.95),rgba(7,11,21,.97));box-shadow:0 22px 65px rgba(10,34,89,.2); }
+      .demo-event { display:grid;grid-template-columns:100px 1fr auto;gap:.9rem;align-items:center;padding:.85rem 1rem;margin:.55rem 0;border:1px solid rgba(132,157,211,.13);border-radius:14px;background:rgba(9,15,28,.72); }
+      .demo-attempt { color:#8ebdff;font-size:.67rem;letter-spacing:.12em;text-transform:uppercase; }
+      .demo-event-copy { color:#dce7fb;font-size:.85rem; }
+      .demo-timestamp { color:#7786a3;font-size:.72rem;font-variant-numeric:tabular-nums; }
+      .demo-risk { display:inline-flex;align-items:center;justify-content:center;min-width:92px;padding:.35rem .7rem;border-radius:999px;border:1px solid rgba(110,143,205,.25);font-size:.66rem;letter-spacing:.1em;animation:risk-in .35s ease-out; }
+      @keyframes risk-in { from { transform:scale(.84);opacity:.3; } to { transform:scale(1);opacity:1; } }
+      .demo-risk-low { color:#a5caff;background:rgba(42,94,169,.15); }
+      .demo-risk-medium { color:#d0bcff;background:rgba(93,65,170,.2); }
+      .demo-risk-high { color:#ffb4bb;background:rgba(145,44,66,.23);border-color:rgba(246,98,121,.42);box-shadow:0 0 20px rgba(194,59,91,.12); }
+      .demo-flow { display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:1rem 0 1.3rem; }
+      .demo-step { border:1px solid rgba(118,147,200,.15);border-radius:999px;padding:.45rem .7rem;color:#74839e;font-size:.64rem;letter-spacing:.08em;text-transform:uppercase; }
+      .demo-step-active { color:#c7e2ff;border-color:rgba(94,161,255,.5);background:rgba(37,89,158,.21);box-shadow:0 0 17px rgba(72,141,246,.14); }
+      .demo-step-done { color:#a8b8d4;border-color:rgba(110,145,205,.26); }
+      .demo-threat-alert { border:1px solid rgba(239,92,117,.48);border-radius:17px;padding:1.1rem 1.25rem;color:#ffdbe0;background:linear-gradient(110deg,rgba(133,35,59,.28),rgba(75,24,49,.18));box-shadow:0 0 30px rgba(190,47,77,.13); }
+      .demo-kpis { display:grid;grid-template-columns:1.45fr 1fr 1fr 1fr 1.45fr;gap:.7rem;margin:1.1rem 0; }
+      .demo-kpi { min-width:0;padding:.9rem 1rem;border:1px solid rgba(132,157,211,.16);border-radius:16px;background:linear-gradient(145deg,rgba(19,28,48,.82),rgba(10,14,25,.9)); }
+      .demo-kpi-label { color:#8291ad;text-transform:uppercase;letter-spacing:.12em;font-size:.61rem; }
+      .demo-kpi-value { color:#eff5ff;font-size:clamp(1.05rem,2vw,1.55rem);font-weight:720;letter-spacing:-.035em;margin-top:.5rem;overflow-wrap:anywhere; }
+      @media (max-width:850px) { .demo-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+      @media (max-width:560px) { .demo-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
       .feed-row { display:grid; grid-template-columns:1.15fr 1.35fr 1.75fr .72fr .78fr .85fr; gap:.8rem;
         align-items:center; padding:.9rem .85rem; border-bottom:1px solid rgba(122,144,187,.12); color:#d8e0f2; font-size:.8rem; }
       .feed-head { color:#7785a1; text-transform:uppercase; font-size:.63rem; letter-spacing:.1em; }
@@ -279,14 +304,16 @@ def _render_hero() -> None:
     left, right = st.columns([1, 2])
     with left:
         if st.button("ENTER SECURITY CENTER", key="enter_security_center", use_container_width=True):
-            st.session_state["dashboard_navigation"] = "Overview"
+            # Threats is an existing navigation state that renders the overview
+            # dashboard; selecting it makes this action a real state transition.
+            st.session_state["dashboard_navigation"] = "Threats"
     with right:
         system_status = "SYSTEM ONLINE" if agent.get("status") == "online" else "API OFFLINE · LOCAL EVENT VIEW"
         demo_status = "DEMO MODE · SYNTHETIC DATA" if demo_enabled else "DEMO MODE OFF"
         assessment = agent.get("latest_assessment") or {}
         ai_status = "LLM ANALYSIS ACTIVE" if assessment.get("llm_used") is True else "LOCAL AI MODE"
         st.caption(f"{system_status} · {ai_status} · {demo_status}")
-    demo_col, note_col = st.columns([1, 3])
+    demo_col, live_demo_col, note_col = st.columns([1, 1, 2])
     with demo_col:
         if st.button("▶  RUN DEMO", key="run_demo_flow", use_container_width=True):
             try:
@@ -296,8 +323,13 @@ def _render_hero() -> None:
                 st.rerun()
             except Exception as error:
                 st.error(f"Demo could not reach the configured HoneyBot API ({API_URL}): {error}")
+    with live_demo_col:
+        if st.button("◉  LIVE DEMO", key="open_live_demo", use_container_width=True):
+            st.session_state["live_demo_runtime"] = _new_live_demo_runtime()
+            st.session_state["dashboard_navigation"] = "Live Demo"
+            st.rerun()
     with note_col:
-        st.caption("The demo sends synthetic traffic only to the configured local HoneyBot API. Map locations are marked as demo data.")
+        st.caption("RUN DEMO sends synthetic events to the local API. LIVE DEMO is session-only and sends no traffic.")
 
 
 @st.cache_data(ttl=5)
@@ -708,6 +740,144 @@ def _render_agent(data: dict[str, Any]) -> None:
     ], width="stretch", hide_index=True)
 
 
+def _new_live_demo_runtime() -> dict[str, Any]:
+    """Create a session-only risk run using the same analyzer and response policy classes."""
+    medium = int(os.environ.get("RISK_THRESHOLD_MEDIUM", "30"))
+    high = int(os.environ.get("RISK_THRESHOLD_HIGH", "60"))
+    critical = int(os.environ.get("RISK_THRESHOLD_CRITICAL", "80"))
+    minimum = max(3, int(os.environ.get("MIN_SUSPICIOUS_EVENTS", "3")))
+    auth_threshold = max(3, minimum, int(os.environ.get("HONEYPOT_AUTH_BLOCK_AFTER", "3")))
+    high_threshold = max(3, minimum, int(os.environ.get("HONEYPOT_BLOCK_AFTER_HIGH_RISK", "3")))
+    duration = int(os.environ.get("HONEYPOT_BLOCK_DURATION_SECONDS", os.environ.get("CONTAINMENT_DURATION", "300")))
+    manager = RiskResponseManager(
+        store=InMemoryRiskStore(),
+        block_duration_seconds=duration,
+        auth_block_after=auth_threshold,
+        block_after_high_risk=high_threshold,
+        min_suspicious_events_before_containment=minimum,
+        medium_risk_threshold=medium,
+        high_risk_threshold=high,
+        critical_risk_threshold=critical,
+    )
+    return {"manager": manager, "analyzer": RuleBasedAnalyzer(
+        medium_threshold=medium, high_threshold=high, critical_threshold=critical),
+        "events": [], "last_attempt_monotonic": 0.0}
+
+
+def _advance_live_demo(runtime: dict[str, Any]) -> None:
+    """Advance the synthetic failed-login sequence through the production policy."""
+    manager: RiskResponseManager = runtime["manager"]
+    history: list[dict[str, Any]] = runtime["events"]
+    if history and (history[-1]["block"] or len(history) >= manager.auth_block_after):
+        return
+    now = time.monotonic()
+    if history and now - runtime["last_attempt_monotonic"] < 2.0:
+        return
+
+    attempt = len(history) + 1
+    features = extract_behavior_features(
+        "POST", "/login", "AI-Honeybot-Live-Demo/1.0", {},
+        prior_requests_from_ip=len(history), authentication_failed=True,
+    )
+    baseline = runtime["analyzer"].analyze(features)
+    evaluated_at = datetime.now(timezone.utc)
+    result = manager.evaluate(
+        "203.0.113.10", "/login", "POST", baseline, features,
+        authentication_failed=True, now=evaluated_at,
+    )
+    history.append({
+        "attempt": attempt,
+        "source_ip": "203.0.113.10",
+        "timestamp": evaluated_at.isoformat(),
+        "activity": "Simulated failed sign-in against the honeypot decoy",
+        "risk_score": result["risk_score"],
+        # The demo presents the requested three-tier scale; CRITICAL is grouped
+        # into HIGH while the exact score and production decision remain intact.
+        "risk_level": "HIGH" if result["risk_level"] == "CRITICAL" else result["risk_level"],
+        "indicators": result["indicators"],
+        "action": result["action"],
+        "block": result["block"],
+        "source_risk": result["source_risk"],
+    })
+    runtime["last_attempt_monotonic"] = now
+
+
+def _render_live_demo_panel(runtime: dict[str, Any]) -> None:
+    _advance_live_demo(runtime)
+    history: list[dict[str, Any]] = runtime["events"]
+    last = history[-1] if history else None
+    blocked = bool(last and last["block"])
+    ip = "203.0.113.10"
+    score = int(last["risk_score"]) if last else 0
+    level = str(last["risk_level"]) if last else "LOW"
+    if level == "CRITICAL":
+        level = "HIGH"
+    manager: RiskResponseManager = runtime["manager"]
+    target = manager.auth_block_after
+    st.markdown('<div class="section-kicker">Live demo · synthetic traffic only</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Honeypot response simulation</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-note">A session-local run uses the existing rule analyzer and temporary containment policy. No packets are sent and no project events or database rows are written.</div>', unsafe_allow_html=True)
+
+    kpis = (("Source IP", ip), ("Attempts", f"{len(history)} / {target}"),
+            ("Risk score", f"{score} / 100"), ("Risk level", level),
+            ("Block status", "TEMPORARY BLOCK" if blocked else "NOT BLOCKED"))
+    kpi_markup = "".join(
+        f'<div class="demo-kpi"><div class="demo-kpi-label">{_safe(label)}</div>'
+        f'<div class="demo-kpi-value">{_safe(value)}</div></div>' for label, value in kpis
+    )
+    st.markdown(f'<div class="demo-kpis">{kpi_markup}</div>', unsafe_allow_html=True)
+
+    completed_steps = 0 if not history else (3 + max(0, (len(history) - 1) * 2))
+    if blocked:
+        completed_steps = 8
+    steps = ("Attack attempt 1", "IP captured", "Risk updated", "Attack attempt 2",
+             "Risk increased", "Attack attempt 3", "High risk", "Temporary block")
+    step_markup = []
+    for index, step in enumerate(steps):
+        state_class = "demo-step-done" if index < completed_steps else "demo-step-active" if index == completed_steps else ""
+        step_markup.append(f'<span class="demo-step {state_class}">{_safe(step)}</span>')
+        if index < len(steps) - 1:
+            step_markup.append('<span class="flow-arrow">→</span>')
+    st.markdown(f'<div class="demo-flow">{"".join(step_markup)}</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="section-kicker">Simulated event log</div>', unsafe_allow_html=True)
+    if not history:
+        st.caption("Preparing the first synthetic attempt…")
+    for event in reversed(history):
+        risk_class = {"LOW": "demo-risk-low", "MEDIUM": "demo-risk-medium"}.get(event["risk_level"], "demo-risk-high")
+        st.markdown(
+            f'<div class="demo-event"><span class="demo-attempt">Attempt {event["attempt"]}</span>'
+            f'<span class="demo-event-copy">{_safe(event["activity"])} · {_safe(event["action"])} · {_safe(event["risk_score"])} / 100</span>'
+            f'<span class="demo-risk {risk_class}">{_safe(event["risk_level"])}</span></div>'
+            f'<div class="demo-timestamp">{_safe(event["timestamp"])} · {_safe("; ".join(event["indicators"]) or "No suspicious indicators")}</div>',
+            unsafe_allow_html=True,
+        )
+    if blocked and last:
+        st.markdown('<div class="demo-threat-alert"><strong>Threat detected — source temporarily blocked due to repeated suspicious activity.</strong></div>', unsafe_allow_html=True)
+        st.caption(f"Containment reason: {_safe(last['block']['reason'])} · Expires: {_safe(last['block']['expires_at'])}")
+    elif last and len(history) >= 3 and level == "HIGH":
+        st.info("High risk reached. The configured attempt threshold has not yet been met; monitoring continues.")
+
+    action_col, back_col = st.columns([1, 1])
+    with action_col:
+        if st.button("↻  RESTART LIVE DEMO", key="restart_live_demo"):
+            st.session_state["live_demo_runtime"] = _new_live_demo_runtime()
+            st.rerun()
+    with back_col:
+        if st.button("←  BACK TO COMMAND CENTER", key="leave_live_demo"):
+            st.session_state["dashboard_navigation"] = "Overview"
+            st.rerun()
+
+
+@st.fragment(run_every=1)
+def render_live_demo() -> None:
+    runtime = st.session_state.get("live_demo_runtime")
+    if runtime is None:
+        runtime = _new_live_demo_runtime()
+        st.session_state["live_demo_runtime"] = runtime
+    _render_live_demo_panel(runtime)
+
+
 st.markdown(
     '<div class="brand-row"><div><div class="brand-name"><span class="brand-mark">◈</span>AI—HONEYBOT</div>'
     '<div class="brand-tagline">Detect. Understand. Contain.</div></div>'
@@ -759,4 +929,7 @@ def render_live_dashboard() -> None:
     )
 
 
-render_live_dashboard()
+if st.session_state.get("dashboard_navigation") == "Live Demo":
+    render_live_demo()
+else:
+    render_live_dashboard()

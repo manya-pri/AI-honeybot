@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: ai-honeybot-public-demo
+    runtime: python
+    plan: free
+    region: singapore
+    branch: master
+    buildCommand: pip install -r requirements-public.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 30 public_app:app
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.11
+      - key: HONEYPOT_DATABASE
+        value: /tmp/honeybot/honeybot.sqlite
+      - key: HONEYPOT_EVENTS_FILE
+        value: /tmp/honeybot/events.jsonl
+      - key: MIN_SUSPICIOUS_EVENTS
+        value: "3"
+      - key: LLM_ENABLED
+        value: "false"
+      - key: DEMO_MODE
+        value: "false"
