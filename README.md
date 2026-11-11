@@ -125,7 +125,7 @@ On macOS/Linux, activate with `source .venv/bin/activate` instead.
 
 ## Public demo deployment
 
-The public Render service shows a **synthetic interactive dashboard** at `/`; its event sequence runs in the browser and sends no traffic to the backend. `/login` is the fictional decoy sign-in. Its WSGI entry point blocks analyst APIs and OpenAPI docs, and the public request gate applies per-IP and global rate limits. The full local analyst dashboard and API are not part of the public service.
+The public Render service at `/` shows a **synthetic interactive dashboard**; its event sequence runs in the browser and sends no traffic to the backend. `/login` is the fictional decoy sign-in. A second Render service, `ai-honeybot-soc-demo`, runs the multi-view Streamlit SOC dashboard using only in-code synthetic fixture rows. Neither public service reads the live event store or exposes analyst APIs. The full local analyst dashboard and API remain private.
 
 To create the public service, use the Render Blueprint from this repository and select the `main` branch for the Blueprint file. The service definition deploys the `master` branch. It uses Render's free web-service plan, so it may sleep when idle, and its SQLite/event files are on ephemeral storage and can reset after restarts or deploys. Persistent logs require a paid host/storage plan and a separate retention decision.
 

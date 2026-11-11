@@ -1,0 +1,3 @@
+# Isolated requirements for the public synthetic-only SOC dashboard.
+streamlit>=1.37,<2.0
+pandas>=2.0,<3.0

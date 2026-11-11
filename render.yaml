@@ -22,3 +22,16 @@ services:
         value: "false"
       - key: DEMO_MODE
         value: "false"
+  - type: web
+    name: ai-honeybot-soc-demo
+    runtime: python
+    plan: free
+    region: singapore
+    branch: master
+    buildCommand: pip install -r requirements-dashboard-public.txt
+    startCommand: streamlit run public_dashboard.py --server.address 0.0.0.0 --server.port $PORT --server.headless true
+    healthCheckPath: /_stcore/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.11
