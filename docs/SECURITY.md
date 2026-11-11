@@ -1,6 +1,6 @@
 # Security boundaries
 
-- The local stack is loopback-only. A separate public Render demo is defined by `render.yaml` and runs through `public_app.py`; that gate exposes only the decoy surface and health check. It blocks analyst APIs/docs/dashboard routes and applies in-memory global/per-IP rate ceilings. Do not deploy the full local Compose proxy as an internet-facing service.
+- The local stack is loopback-only. A separate public Render demo is defined by `render.yaml` and runs through `public_app.py`; the root page is a static synthetic dashboard, while decoy routes are served by Flask. It blocks analyst APIs/docs and the local dashboard, and applies in-memory global/per-IP rate ceilings. The synthetic dashboard remains available when a decoy source is temporarily contained. Do not deploy the full local Compose proxy as an internet-facing service.
 - The public decoy logs requester IP, method, path, user-agent, risk results, and sanitized details while the instance is running. Public pages warn visitors not to submit real credentials. The free Render plan stores SQLite and JSONL under ephemeral `/tmp` storage, so records can disappear on restart/redeploy. The deployment is a demo, not production monitoring.
 - Decoy resources contain static synthetic strings and sample records only. No host files, keys, credentials or real customer data are read.
 - Login submission values are redacted before logging; arbitrary raw bodies are not retained.

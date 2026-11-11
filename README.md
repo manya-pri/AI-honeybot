@@ -125,11 +125,11 @@ On macOS/Linux, activate with `source .venv/bin/activate` instead.
 
 ## Public demo deployment
 
-The public Render service is intentionally a **decoy-only demonstration**. Its WSGI entry point blocks the analyst APIs, dashboard, and OpenAPI docs; the public request gate applies per-IP and global rate limits. Login pages warn visitors not to submit real credentials. The local analyst dashboard and API remain available for development, but are not part of the public service.
+The public Render service shows a **synthetic interactive dashboard** at `/`; its event sequence runs in the browser and sends no traffic to the backend. `/login` is the fictional decoy sign-in. Its WSGI entry point blocks analyst APIs and OpenAPI docs, and the public request gate applies per-IP and global rate limits. The full local analyst dashboard and API are not part of the public service.
 
 To create the public service, use the Render Blueprint from this repository and select the `main` branch for the Blueprint file. The service definition deploys the `master` branch. It uses Render's free web-service plan, so it may sleep when idle, and its SQLite/event files are on ephemeral storage and can reset after restarts or deploys. Persistent logs require a paid host/storage plan and a separate retention decision.
 
-The hosted decoy logs source IP, method, path, user-agent, risk results, and sanitized request details while it is running. Password-like values are redacted. Do not use this demo to collect real credentials or sensitive personal data. This is an educational prototype, not a hardened production honeypot.
+Requests to the hosted decoy can log source IP, method, path, user-agent, risk results, and sanitized request details while it is running. The synthetic dashboard feed is not logged. Password-like values are redacted. Do not use this demo to collect real credentials or sensitive personal data. This is an educational prototype, not a hardened production honeypot.
 
 See [deployment steps and boundaries](docs/DEPLOYMENT.md) before publishing a service URL.
 
